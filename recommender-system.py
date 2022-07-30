@@ -19,7 +19,7 @@ def cosine_similar(soup):
     return cosine_sim
 
 anime['title (type)'] = anime.title + ' (' + anime.type + ')'
-manga['title (type)'] = manga.title + ' (' + manga.media_type +')'
+manga['title (type)'] = manga.title + ' (' + manga.type +')'
 
 anime_indicete = pd.Series(anime.index, index=anime['title (type)'])
 manga_indicete = pd.Series(manga.index, index=manga['title (type)'])
@@ -43,24 +43,40 @@ def content_recommender(title, anime=True):
     return recommend_indices
 
 # Top Manga & Anime
-top_manga = manga.sort_values(by=['score'], ascending=False)
+top_manga = manga.sort_values(by=['score_'], ascending=False)
 top_anime = anime.sort_values(by=['score_'], ascending=False)
 
 # sort by genres
+#anime
 top_anime['list_genres'] = top_anime.genres.apply(lambda x: x.split(', '))
-bag_of_genres = []
+genres_of_anime = []
 for i in top_anime.list_genres:
     for j in i:
-        bag_of_genres.append(j)
-bag_of_genres = set(bag_of_genres)
-bag_of_genres.remove('Unknown')
-bag_of_genres = list(bag_of_genres)
+        genres_of_anime.append(j)
+genres_of_anime = set(genres_of_anime)
+genres_of_anime.remove('Unknown')
+genres_of_anime = list(genres_of_anime)
+
+#manga
+top_manga['list_genres'] = top_manga.genres.apply(lambda x: x.split(', '))
+genres_of_manga = []
+for i in top_manga.list_genres:
+    for j in i:
+        genres_of_manga.append(j)
+genres_of_manga = set(genres_of_manga)
+genres_of_manga.remove('Unknown')
+genres_of_manga = list(genres_of_manga)
+
 #filter
-def filter(x):
-    if len(set(selected_genres)) == len(set(x)&set(selected_genres)):
+def filter_anime(x):
+    if len(set(selected_genres_anime)) == len(set(x)&set(selected_genres_anime)):
         return 1
     else: return 0
 
+def filter_manga(x):
+    if len(set(selected_genres_manga)) == len(set(x)&set(selected_genres_manga)):
+        return 1
+    else: return 0
 
 # Frontend section
 #st.set_page_config(layout='wide')
@@ -76,20 +92,20 @@ def anime_frontend(recommendation, show=10):
         with st.container():
             st.header(recommendation.iloc[i]['title'])
             col1, col2 = st.columns([2,6])
-            col1.image(recommendation.iloc[i]['picture_url'])
+            col1.image(recommendation.iloc[i]['main_picture'])
             col2.subheader('Synopsis')
             col2.markdown(recommendation.iloc[i]['synopsis'])
 
             col3, col4 = st.columns([2,2])
             col3.markdown(
 f'''
-Type : {recommendation.iloc[i]['type']}\n
+Type : {recommendation.iloc[i]['type'].upper()}\n
 Episodes : {recommendation.iloc[i]['episodes']}\n
-Status : {recommendation.iloc[i]['status']}\n
-Aired : {recommendation.iloc[i]['airing_from']} to {recommendation.iloc[i]['airing_to']}\n
+Status : {recommendation.iloc[i]['status'].title()}\n
+Aired : {recommendation.iloc[i]['start_date']} to {recommendation.iloc[i]['end_date']}\n
 Primiered : {recommendation.iloc[i]['start_season'].title()} {recommendation.iloc[i]['start_year']}\n
 Producers : {recommendation.iloc[i]['producers']}\n
-Source : {recommendation.iloc[i]['source']}\n
+Source : {recommendation.iloc[i]['source'].title()}\n
 Genre : {recommendation.iloc[i]['genres']}\n
 Demographic : {recommendation.iloc[i]['demographics']}\n
 Duration : {recommendation.iloc[i]['duration']}\n
@@ -109,13 +125,16 @@ with anime_tab1:
     st.header('Top Rated Anime')
     anime_frontend(top_anime)
 
+# Filter by genres - anime
 with anime_tab2:
     st.header('Search anime by genre')
-    selected_genres = st.multiselect('Select your favorite genres', bag_of_genres)
-    top_anime['filtered'] = top_anime.list_genres.apply(filter)
+    selected_genres_anime = st.multiselect('Select your favorite anime genres', genres_of_anime)
+    top_anime['filtered'] = top_anime.list_genres.apply(filter_anime)
     best_by_genres = top_anime.loc[top_anime.filtered==1]
     if st.button('Find anime'):
-        if len(best_by_genres) < 10:
+        if len(best_by_genres) == 0:
+            st.markdown('Not Found')
+        elif len(best_by_genres) < 10:
             anime_frontend(best_by_genres, show=len(best_by_genres))
         else:
             anime_frontend(best_by_genres)
@@ -133,7 +152,7 @@ with anime_tab3:
 
 
 # Frontend Manga
-manga_tab1, manga_tab2 = tab_2.tabs(['Top Manga', 'Recommendation'])
+manga_tab1, manga_tab2, manga_tab3 = tab_2.tabs(['Top Manga', 'Genre', 'Recommendation'])
 
 def manga_frontend(recommendation):
     for i in range(10):
@@ -141,20 +160,21 @@ def manga_frontend(recommendation):
             st.header(recommendation.iloc[i]['title'])
             col1, col2 = st.columns([2,6])
             with col1:
-                st.image(recommendation.iloc[i]['main_picture_medium'])
+                st.image(recommendation.iloc[i]['main_picture'])
             with col2: 
                 st.markdown(
 f'''
-Type : {recommendation.iloc[i]['media_type']}\n
-Volume : {recommendation.iloc[i]['num_volumes']}\n
-Chapters : {recommendation.iloc[i]['num_chapters']}\n
-Status : {recommendation.iloc[i]['status']}\n
+Type : {recommendation.iloc[i]['type'].title()}\n
+Volume : {recommendation.iloc[i]['volumes']}\n
+Chapters : {recommendation.iloc[i]['chapters']}\n
+Status : {recommendation.iloc[i]['status'].title()}\n
 Published : {recommendation.iloc[i]['start_date']} to {recommendation.iloc[i]['end_date']} \n
 Genre : {recommendation.iloc[i]['genres']}\n
 Author : {recommendation.iloc[i]['authors']}\n
-Score : {recommendation.iloc[i]['score']}\n
-Rank : {recommendation.iloc[i]['rank']}
+Score : {recommendation.iloc[i]['score_']}\n
 '''
+# Rank : {recommendation.iloc[i]['rank']}
+
 )
             st.subheader('Synopsis')
             st.markdown(recommendation.iloc[i]['synopsis'])
@@ -166,8 +186,22 @@ with manga_tab1:
     st.header('Top Rated Manga')
     manga_frontend(top_manga)
 
-# Recommendation Manga
+# Filter by genres - manga
 with manga_tab2:
+    st.header('Search manga by genre')
+    selected_genres_manga = st.multiselect('Select your favorite manga genres', genres_of_manga)
+    top_manga['filtered'] = top_manga.list_genres.apply(filter_manga)
+    best_by_genres = top_manga.loc[top_manga.filtered==1]
+    if st.button('Find manga'):
+        if len(best_by_genres) == 0:
+            st.markdown('Not Found')
+        elif len(best_by_genres) < 10:
+            manga_frontend(best_by_genres, show=len(best_by_genres))
+        else:
+            manga_frontend(best_by_genres)
+
+# Recommendation Manga
+with manga_tab3:
     st.header('Recommendation')
 
     st.markdown('Content-based manga recommendation system from your favorite manga')
